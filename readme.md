@@ -1,6 +1,6 @@
 # ASCII Fireworks 🎆
 
-![Demo GIF](https://media.giphy.com/media/vFKqnCdLPNOKc/giphy.gif)
+![Demo GIF](https://github.com/jimmybisenius/ascii-fireworks/blob/c8e94b0253d31b1f7e6555df3de83d4e535c7079/demo.gif)
 
 
 Howdy all. I saw [this post](https://x.com/JohnPhamous/status/1935748219038056967) on my Twitter feed today and got inspired.
