@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ASCII Fireworks – low-boom version</title>
+<title>ASCII Fireworks – loop option</title>
 <style>
 	:root { --font:10px; }
 	body { margin:0; background:#000; overflow:hidden; }
@@ -18,7 +18,7 @@
 		font-family:monospace; font-size:10px; color:#888;
 		visibility:hidden; pointer-events:none;
 	}
-	#player{ position:fixed; width:0; height:0; border:0; }   /* hide YT */
+	#player{ position:fixed; width:0; height:0; border:0; }
 </style>
 </head>
 <body>
@@ -36,164 +36,153 @@ const FONT = 10, SHOW_MS = 90_000;
 const CHARSET = "A@#%&*+=-:.!?0123456789";
 const VIDEO_ID = "b-1f68ieD80";
 const SFX_POOL = 5;
-const BASE_VOL = 0.125;                // halved from previous 0.25
+const BASE_VOL = 0.125;
 
-/* ───────── GRID ───────── */
+/* loop flag from URL */                               // ← NEW
+const LOOP_MODE = new URLSearchParams(location.search).get('loop') === 'true'; // ← NEW
+
+/* ───────── GRID SETUP ───────── */
 document.documentElement.style.setProperty('--font', FONT + 'px');
 const screen = document.getElementById('screen');
-const charW = FONT * 0.6,
-      COLS  = Math.floor(innerWidth / charW),
-      ROWS  = Math.floor(innerHeight / FONT);
+const COLS = Math.floor(innerWidth / (FONT * 0.6));
+const ROWS = Math.floor(innerHeight / FONT);
 screen.style.gridTemplateColumns = `repeat(${COLS}, var(--font))`;
 
-const cells = [];
-for (let y = 0; y < ROWS; ++y)
- for (let x = 0; x < COLS; ++x) {
-   const s = document.createElement('span');
-   s.className = 'px';
-   s.textContent = CHARSET[(Math.random()*CHARSET.length)|0];
-   screen.appendChild(s);
-   cells.push(s);
- }
-const idx  = (x,y)=>y*COLS+x,
-      at   = (x,y)=>cells[idx(x,y)],
-      inB  = (x,y)=>x>=0&&x<COLS&&y>=0&&y<ROWS;
+const cells=[];
+for(let y=0;y<ROWS;y++)
+	for(let x=0;x<COLS;x++){
+		const s=document.createElement('span');
+		s.className='px';
+		s.textContent=CHARSET[(Math.random()*CHARSET.length)|0];
+		screen.appendChild(s); cells.push(s);
+	}
+const idx=(x,y)=>y*COLS+x, at=(x,y)=>cells[idx(x,y)], inB=(x,y)=>x>=0&&x<COLS&&y>=0&&y<ROWS;
 
-/* ───────── PROTECTED PIXELS (moon + credits) ───────── */
-const protectSet = new Set();
-const protect = (x,y)=>protectSet.add(idx(x,y));
+/* ───────── PROTECTED AREA ───────── */
+const protectSet=new Set(), protect=(x,y)=>protectSet.add(idx(x,y));
 
 /* Moon */
 const moonR=6, moonX=2, moonY=2;
-for (let dy=-moonR;dy<=moonR;++dy)
- for (let dx=-moonR;dx<=moonR;++dx){
-   if (Math.hypot(dx,dy)>moonR) continue;
-   const x=moonX+dx, y=moonY+dy;
-   if(!inB(x,y)) continue;
-   const shade = Math.round(208 - 80*(Math.hypot(dx,dy)/moonR));
-   at(x,y).textContent='@';
-   at(x,y).style.color=`rgb(${shade},${shade},${shade})`;
-   protect(x,y);
- }
+for(let dy=-moonR;dy<=moonR;dy++)
+	for(let dx=-moonR;dx<=moonR;dx++){
+		if(Math.hypot(dx,dy)>moonR)continue;
+		const x=moonX+dx,y=moonY+dy; if(!inB(x,y))continue;
+		const shade=Math.round(208-80*(Math.hypot(dx,dy)/moonR));
+		at(x,y).textContent='@';
+		at(x,y).style.color=`rgb(${shade},${shade},${shade})`;
+		protect(x,y);
+	}
 function pix(x,y,c){ if(inB(x,y)&&!protectSet.has(idx(x,y))) at(x,y).style.color=c; }
 
-/* ───────── FIREWORK SFX POOL ───────── */
-const proto = document.getElementById('sfx-proto'); proto.volume = BASE_VOL;
-const sfx = [...Array(SFX_POOL)].map(()=>proto.cloneNode());
-let sfi = 0;
-function boom(){
-  const a = sfx[sfi]; sfi = (sfi+1)%sfx.length;
-  a.volume = BASE_VOL * (0.8 + Math.random()*0.4);   //  ±20 %
-  a.currentTime = 0;
-  a.play().catch(()=>{});            // ignore if still blocked
-}
+/* ───────── SFX POOL ───────── */
+const proto=document.getElementById('sfx-proto'); proto.volume=BASE_VOL;
+const sfx=[...Array(SFX_POOL)].map(()=>proto.cloneNode());
+let sfi=0;
+function boom(){ const a=sfx[sfi]; sfi=(sfi+1)%sfx.length;
+	a.volume=BASE_VOL*(0.8+Math.random()*0.4);
+	a.currentTime=0; a.play().catch(()=>{}); }
 
 /* ───────── FIREWORK ENGINE ───────── */
-const palette = ['#FF4060','#FFD93D','#3DF5FF','#A97BFF','#FF9D00','#32FF7A'];
-const rndCol = ()=>palette[(Math.random()*palette.length)|0];
-
+const palette=['#FF4060','#FFD93D','#3DF5FF','#A97BFF','#FF9D00','#32FF7A'];
+const randCol=()=>palette[(Math.random()*palette.length)|0];
 class Particle{
- constructor(x,y,clr){ const a=Math.random()*2*Math.PI,s=Math.random()*1.5+0.5;
-   this.x=x;this.y=y;this.dx=Math.cos(a)*s;this.dy=Math.sin(a)*s;
-   this.t=20+Math.random()*15;this.c=clr; }
- tick(){
-   if(this.t<=0||!inB(this.x,this.y)) return false;
-   pix(this.x|0,this.y|0,'#000');
-   this.x+=this.dx; this.y+=(this.dy+=0.05);
-   pix(this.x|0,this.y|0,this.c);
-   return --this.t>0;
- }}
+	constructor(x,y,c){const a=Math.random()*2*Math.PI,s=Math.random()*1.5+0.5;
+		this.x=x;this.y=y;this.dx=Math.cos(a)*s;this.dy=Math.sin(a)*s;
+		this.t=20+Math.random()*15;this.c=c;}
+	tick(){ if(this.t<=0||!inB(this.x,this.y)) return false;
+		pix(this.x|0,this.y|0,'#000');
+		this.x+=this.dx; this.y+=(this.dy+=0.05);
+		pix(this.x|0,this.y|0,this.c); return --this.t>0;}
+}
 class Rocket{
- constructor(x){
-   this.x=x; this.y=ROWS-2; this.state='fuse';
-   this.t0=performance.now(); this.fuse=1200+Math.random()*800;
-   this.top=3+Math.random()*ROWS*0.4; this.v=-1-Math.random()*0.5;
-   this.c=rndCol(); this.parts=[];
- }
- run(t){
-   switch(this.state){
-     case 'fuse':
-       pix(this.x,this.y,(t-this.t0)%200<100?'#FFA533':'#FF6633');
-       pix(this.x,this.y+1,'#884400');
-       if(t-this.t0>this.fuse) this.state='asc';
-       break;
-     case 'asc':
-       pix(this.x,this.y|0,'#000');
-       this.y+=this.v; pix(this.x,this.y|0,this.c);
-       if(this.y<=this.top){
-         this.state='bang'; boom();
-         for(let i=0;i<50;++i) this.parts.push(new Particle(this.x,this.y,this.c));
-       }
-       break;
-     case 'bang':
-       this.parts=this.parts.filter(p=>p.tick());
-       if(!this.parts.length) this.state='done';
-   }
-   return this.state!=='done';
- }}
+	constructor(x){
+		this.x=x; this.y=ROWS-2; this.state='fuse';
+		this.t0=performance.now(); this.fuse=1200+Math.random()*800;
+		this.top=3+Math.random()*ROWS*0.4; this.v=-1-Math.random()*0.5;
+		this.c=randCol(); this.parts=[];
+	}
+	run(t){
+		switch(this.state){
+			case 'fuse':
+				pix(this.x,this.y,(t-this.t0)%200<100?'#FFA533':'#FF6633');
+				pix(this.x,this.y+1,'#884400');
+				if(t-this.t0>this.fuse)this.state='asc';
+				break;
+			case 'asc':
+				pix(this.x,this.y|0,'#000');
+				this.y+=this.v; pix(this.x,this.y|0,this.c);
+				if(this.y<=this.top){
+					this.state='bang'; boom();
+					for(let i=0;i<50;i++) this.parts.push(new Particle(this.x,this.y,this.c));
+				}
+				break;
+			case 'bang':
+				this.parts=this.parts.filter(p=>p.tick());
+				if(!this.parts.length)this.state='done';
+		}
+		return this.state!=='done';
+	}
+}
 
- /* ───────── CREDITS (10 px) ───────── */
-function textLine(str,row,col,colr){
- for(let i=0;i<str.length;i++){
-   const x=col+i,y=row; if(!inB(x,y)) continue;
-   at(x,y).textContent=str[i]; at(x,y).style.color=colr; protect(x,y);
- }}
+/* ───────── CREDITS ───────── */
+function textLine(str,row,col,color){
+	for(let i=0;i<str.length;i++){
+		const x=col+i,y=row; if(!inB(x,y))continue;
+		at(x,y).textContent=str[i]; at(x,y).style.color=color; protect(x,y);
+	}
+}
 function showCredits(){
- const h="ASCII Fireworks", s="By Jim Bisenius";
- const rh=Math.floor(ROWS/2)-1,ch=Math.floor((COLS-h.length)/2);
- textLine(h,rh,ch,'#FFD93D');
- const rs=rh+2, cs=Math.floor((COLS-s.length)/2);
- textLine(s,rs,cs,'#AAAAAA');
+	const h="ASCII Fireworks", s="By Jim Bisenius";
+	const rh=Math.floor(ROWS/2)-1, ch=Math.floor((COLS-h.length)/2);
+	textLine(h,rh,ch,'#FFD93D');
+	const rs=rh+2, cs=Math.floor((COLS-s.length)/2);
+	textLine(s,rs,cs,'#AAAAAA');
 }
 
 /* ───────── MAIN LOOP ───────── */
-let rockets=[], start=performance.now(), end=start+SHOW_MS, credits=false;
-const push=()=>rockets.push(new Rocket(2+Math.random()*(COLS-4)|0));
-for(let i=0;i<3;i++) push();
+let rockets=[], start=performance.now(),
+	end=LOOP_MODE ? Infinity : start+SHOW_MS,      // ← NEW
+	credits=false;
+const addRocket=()=>rockets.push(new Rocket(2+Math.random()*(COLS-4)|0));
+for(let i=0;i<3;i++) addRocket();
 
 function step(){
- const t=performance.now();
- if(t<end){
-   const finale=t>end-5000;
-   if(Math.random()<(finale?0.2:0.05)) push();
- }else if(!credits){
-   for(let i=0;i<6;i++) push();
-   setTimeout(showCredits,1800); credits=true;
- }
- rockets = rockets.filter(r=>r.run(t));
+	const t=performance.now();
+	if(t<end){
+		const finale = !LOOP_MODE && t>end-5000;   // ← NEW
+		if(Math.random()<(finale?0.2:0.05)) addRocket();
+	}else if(!credits && !LOOP_MODE){            // ← NEW
+		for(let i=0;i<6;i++) addRocket();
+		setTimeout(showCredits,1800); credits=true;
+	}
+	rockets = rockets.filter(r=>r.run(t));
 }
 
-/* RAF + background setInterval so audio keeps firing */
+/* RAF + background timer */
 function rafLoop(){ step(); requestAnimationFrame(rafLoop); }
 rafLoop();
-
-let bgTimer=null;
+let bg=null;
 document.addEventListener('visibilitychange',()=>{
- if(document.hidden && !bgTimer){
-   bgTimer=setInterval(step,60);        // keep physics/audio alive
- }else if(!document.hidden && bgTimer){
-   clearInterval(bgTimer); bgTimer=null;
- }
+	if(document.hidden && !bg) bg=setInterval(step,60);
+	else if(!document.hidden && bg){ clearInterval(bg); bg=null; }
 });
 
-/* ───────── MUSIC AUTOPLAY & BADGE ───────── */
-let ytPlayer;
-window.onYouTubeIframeAPIReady=()=>ytPlayer=new YT.Player('player',{
-  videoId:VIDEO_ID,
-  playerVars:{autoplay:1,loop:1,playlist:VIDEO_ID},
-  events:{
-    onReady:()=>setTimeout(checkAuto,800),
-    onStateChange:e=>{ if(e.data===1) hideBadge(); }
-}});
+/* ───────── MUSIC & BADGE ───────── */
+let player;
+window.onYouTubeIframeAPIReady=()=>player=new YT.Player('player',{
+	videoId:VIDEO_ID, playerVars:{autoplay:1,loop:1,playlist:VIDEO_ID},
+	events:{ onReady:()=>setTimeout(checkAuto,800),
+	         onStateChange:e=>{ if(e.data===1) hideBadge(); }}
+});
 const badge=document.getElementById('playnote');
-function checkAuto(){ if(!ytPlayer||ytPlayer.getPlayerState()!==1) badge.style.visibility='visible'; }
-function hideBadge(){ badge.style.visibility='hidden'; }
+const hideBadge=()=>badge.style.visibility='hidden';
+function checkAuto(){ if(!player||player.getPlayerState()!==1) badge.style.visibility='visible'; }
 
-/* click unlocks both musics & sfx */
+/* click unlock */
 document.addEventListener('click',()=>{
- if(ytPlayer) ytPlayer.playVideo();
- sfx.forEach(a=>a.play().then(a.pause.bind(a)).catch(()=>{}));
- hideBadge();
+	if(player) player.playVideo();
+	sfx.forEach(a=>a.play().then(a.pause.bind(a)).catch(()=>{}));
+	hideBadge();
 });
 
 /* rebuild on resize */
