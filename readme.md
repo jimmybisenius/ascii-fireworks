@@ -10,4 +10,4 @@ Link to project: [`https://fireworks.jimbisenius.com`](https://fireworks.jimbise
 
 I hope you enjoy!
 
-- Jim Bisenius
+\- Jim Bisenius
